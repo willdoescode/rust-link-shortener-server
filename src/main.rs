@@ -17,7 +17,7 @@ pub mod models;
 
 fn main() {
 	rocket::ignite()
-    .mount("/", routes![create_new_shortened_link])
+    .mount("/", routes![create_new_shortened_link, get_shortened_link])
     .launch();
 }
 
@@ -31,7 +31,7 @@ struct ErrorJson {
   error: String
 }
 
-#[derive(FromForm)]
+#[derive(FromForm, Serialize, Debug)]
 struct InputForm {
   url: String
 }
@@ -65,6 +65,14 @@ fn create_new_shortened_link(inputform: Form<InputForm>)
   Ok(Json(ResJson::new(post.id)))
 }
 
+#[get("/get/<id>")]
+fn get_shortened_link(id: String) -> Result<Json<InputForm>, Json<ErrorJson>> {
+  match get_link(id.clone()) {
+    Err(_) => Err(Json(ErrorJson::new(format!("No links match with {}", id)))),
+    Ok(link) => Ok(Json(InputForm { url: link.url }))
+  }
+}
+
 fn new_link<'a>(id: &'a str, url: &'a str) -> Link {
   use schema::links;
   let conn = connect_db();
@@ -78,6 +86,22 @@ fn new_link<'a>(id: &'a str, url: &'a str) -> Link {
     .values(&new_link)
     .get_result(&conn)
     .expect("Error saving to db")
+}
+
+fn get_link(url_id: String) -> Result<Link, ()> {
+  use schema::links::dsl::*;
+
+  let conn = connect_db();
+  let res = links.filter(id.eq(url_id))
+    .limit(1)
+    .load::<Link>(&conn)
+    .expect("Error loading links");
+
+  for link in res {
+    return Ok(link)
+  }
+
+  Err(())
 }
 
 #[allow(dead_code)]
